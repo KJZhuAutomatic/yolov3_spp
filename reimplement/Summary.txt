@@ -1,0 +1,97 @@
+Darknet类有两个主要成员函数：__init__, forward
+
+	__init__需要两个函数: parse_cofig, create_modules
+
+		parse_cofig: 
+		create_modules:
+
+	forward calls forward func of each modules sequentially. 
+
+
+nms func's pipeline:
+	
+	discard some pred according to confidence threshold
+	discard some pred with too small/large width/height
+	if multi_label:
+		for the multi class, repeat the box pred if conf > threshold
+	else:
+		choose the largest conf class for box, then discard conf < threshold
+	multi_class nms 
+
+image pre/post process:
+	pre process: resize image as large size equal to input size, 
+	             and keep aspect ratio, record scale ratio
+	letter box: put resized image a required size (width and height multi of 32 if rect or input_size X input_size) , record pad value 
+	post process: rescale boxes coordinate with ratio and pad value, 
+				  or recompute it with original and processed image size.
+
+dataset func:
+	__init__:
+		construct image file list and label file list
+			check:
+				image file format suffix
+				
+		record the shape of image in image file list
+		if rectangular train, compute batch shape 
+		cache labels and images (optional)
+
+	__getitem__:
+		if mosaic mosaic_load else image_load
+		if augment, random_affine(xyxy label is required), hsv_augment
+		label normalize
+		image and label  left right flip if augment
+		put image index in label
+
+build_target:
+	for every yolo layer output:
+		get yolo layer normalized anchors
+		remap targets(normalized) to grid size
+		compute wh_iou of anchors and targets and choose which larger than threshold
+		choosed target [image_idx, cls, grid_x, grid_y, grid_w, grid_h],record:
+			target_box [grid_xy-grid_ji, grid_wh]
+			target_cls [cls]
+			indices [image_idx, anchor_idx, grid_i, grid_j]
+			anchor [num_target, 2] [anchor_w, anchor_h]
+
+compute_loss:
+	for every layer output:
+		for indices(positive sample) giou with prediction and target boxes
+		construct target_obj in indices is weighted giou, other is 0
+		construct target_cls for positive sample 
+		BCE(pred_obj, target_obj)
+		for positive sample:
+			loss_box = 1 - giou
+			loss_cls = BCE(pred_cls, target_cls)
+	weighted losses
+
+Improvement:
+	my nms and remap_coords √
+	COCO evaluate a subset of dataset
+
+note:
+	the type of indices
+	torch.zeros(*size) √  torch.zeros(shape=(a,b)) ×
+	IMPORTANT: when get partial data which meets the requirement, e.g torch.nonzero
+				pay attention to case that no data be gotten. In yolov3_spp.compute_loss, I was received loss of value nan, because of None of positive sample.
+				TODO nms func  √ Only indices is fine, compute will generate nan.
+	!!!!!!!!!!!!!!!!!!!Very fool error but waste time much!!!!!!!!!!!!!!!!!!!!!!
+				array[:, inds] and array[range(n), inds] is different, see
+				train_utils.train_eval_utils line 73.
+				two error in reimplement.utils nms func line 48,90.
+				an very fool error in reimplement.utils xyxy2xywh.
+	exp().clamp(max=), specify a reasonable max value to avoid overflow
+
+
+training: my code use mosaic(my own) and no affine augment mAP decrease.
+		TODO
+		   his code use mosaic and and no affine augment to keep mAP.
+rule of import 
+use server to solve
+	environment: generation of requirement.txt
+	synchronous: github   
+
+一直记住目标，目的要时刻明确清晰
+从结果反推回去需要的变量，不需要的立马删除掉
+从后面看要的做的，不如早作划分
+需要的不容易分离出来，先一步剔除一些肯定不要的，这属于反向考虑目标
+拥有一些条件，要达到一个目标，可以从两个方向，很多角度思路逻辑来解决这件事
