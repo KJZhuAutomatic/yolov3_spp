@@ -1,21 +1,17 @@
 import sys
 import os
 import torch
+import math
+import time
+import random
 from torch.cuda import amp
 import torch.nn.functional as F
 
-from build_utils.utils import *
 from .coco_eval import CocoEvaluator
 from .coco_utils import get_coco_api_from_dataset
-import train_utils.distributed_utils as utils
+from . import distributed_utils as utils
 
 from reimplement import YoloDataset, YoloV3SPP, nms, remap_coords
-'''
-sys.path.append(os.path.dirname(__file__) + os.sep + '../')
-print(sys.path)
-from ..models import Darknet
-from ..build_utils.datasets import LoadImagesAndLabels
-'''
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch,
                     print_freq, accumulate, img_size,
@@ -136,8 +132,6 @@ def evaluate(model, data_loader, coco=None, device=None):
         model_time = time.time()
         pred = model(imgs)[0]  # only get inference result
    
-        # pred = non_max_suppression(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
-
         pred = nms(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
         model_time = time.time() - model_time
 
@@ -189,7 +183,7 @@ def _get_iou_types(model):
     return iou_types
 
 def evaluate_test():
-    weights = 'weights/yolov3spp-voc-512.pt'
+    weights = '../yolov3_spp/weights/yolov3spp-voc-512.pt'
     device = torch.device('cuda')
     batch_size = 8
     num_workers = 8
@@ -197,7 +191,7 @@ def evaluate_test():
     cfg = 'cfg/my_yolov3.cfg'
     dataset = YoloDataset(path=path, img_size=512, 
                           batch_size=batch_size,
-                          augment=False, rect=True)
+                          augment=False, rect=True, data_loc='../yolov3_spp')
     model = YoloV3SPP(cfg).to(device)
     checkpoint = torch.load(weights)
     model.load_state_dict(checkpoint['model'])

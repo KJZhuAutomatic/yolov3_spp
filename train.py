@@ -11,16 +11,17 @@ from build_utils.datasets import *
 from build_utils.utils import *
 from train_utils import train_eval_utils as train_util
 from train_utils import get_coco_api_from_dataset
-
+from pathlib import Path
+'''
 from reimplement import YoloV3SPP, YoloDataset
 from reimplement.yolo_layers import YoloLayer
-
+'''
 
 def train(hyp):
     device = torch.device(opt.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
-    wdir = "weights" + os.sep  # weights dir
+    wdir = str(Path(opt.weights).parent) + os.sep  # weights dir
     best = wdir + "best.pt"
     results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
@@ -63,20 +64,21 @@ def train(hyp):
         os.remove(f)
 
     # Initialize model
-    # model = Darknet(cfg).to(device)
-    model = YoloV3SPP(cfg).to(device)
+    model = Darknet(cfg).to(device)
+    # model = YoloV3SPP(cfg).to(device)
 
     # 是否冻结权重，只训练predictor的权重
     if opt.freeze_layers:
         # 索引减一对应的是predictor的索引，YOLOLayer并不是predictor
-        '''
+        
         output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if
                                 isinstance(module, YOLOLayer)]
     
+        
         '''
         output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if
                                 isinstance(module, YoloLayer)]
-        
+        '''
         # 冻结除predictor和YOLOLayer外的所有层
         freeze_layer_indeces = [x for x in range(len(model.module_list)) if
                                 (x not in output_layer_indices) and
@@ -160,13 +162,15 @@ def train(hyp):
 
     # dataset
     # 训练集的图像尺寸指定为multi_scale_range中最大的尺寸
-    '''
+    
     train_dataset = LoadImagesAndLabels(train_path, imgsz_train, batch_size,
                                         augment=True,
                                         hyp=hyp,  # augmentation hyperparameters
                                         rect=opt.rect,  # rectangular training
                                         cache_images=opt.cache_images,
-                                        single_cls=opt.single_cls)
+                                        single_cls=opt.single_cls,
+                                        data_loc=data_dict["loc"] #yolo dataset location
+                                        )
 
     
     # 验证集的图像尺寸指定为img_size(512)
@@ -174,7 +178,7 @@ def train(hyp):
                                       hyp=hyp,
                                       rect=True,  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
                                       cache_images=opt.cache_images,
-                                      single_cls=opt.single_cls)
+                                      single_cls=opt.single_cls, data_loc=data_dict["loc"])
     '''
     
     train_dataset = YoloDataset(train_path, imgsz_train, batch_size, 
@@ -183,7 +187,7 @@ def train(hyp):
     
     val_dataset = YoloDataset(test_path, imgsz_test, batch_size, 
                                 augment=False, rect=True)
-    
+    '''
     # dataloader
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
@@ -215,7 +219,7 @@ def train(hyp):
     print("starting traning for %g epochs..." % epochs)
     print('Using %g dataloader workers' % nw)
     for epoch in range(start_epoch, epochs):
-        
+        '''
         mloss, lr = train_util.train_one_epoch(model, optimizer, train_dataloader,
                                                device, epoch,
                                                accumulate=accumulate,  # 迭代多少batch才训练完64张图片
@@ -230,7 +234,7 @@ def train(hyp):
     
         # update scheduler
         scheduler.step()
-        
+        '''
 
         if opt.notest is False or epoch == epochs - 1:
             # evaluate on the test dataset
@@ -301,7 +305,7 @@ if __name__ == '__main__':
     parser.add_argument('--savebest', type=bool, default=True, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='../yolov3_spp/weights/yolov3spp-voc-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')

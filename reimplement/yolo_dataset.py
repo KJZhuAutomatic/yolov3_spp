@@ -21,8 +21,11 @@ def read_annotation(label_file_name:str) -> np.ndarray:
 
 class YoloDataset(torch.utils.data.Dataset):
 	"""Process yolo format data."""
-	def __init__(self, path:str, img_size:int = 416, batch_size:int = 16, 
-	             augment=True, rect=False, aug_param:Optional[Dict[str, float]] = None):
+	def __init__(self, path:str, img_size:int = 416,
+	             batch_size:int = 16, 
+	             augment=True, rect=False,
+	             aug_param:Optional[Dict[str, float]] = None, 
+	             data_loc:str = '.'):
 		super(YoloDataset, self).__init__()
 		assert not (img_size % 32), 'Assigned image size must be multiple of 32.'
 		with open(path) as f:
@@ -40,6 +43,7 @@ class YoloDataset(torch.utils.data.Dataset):
 		pbar = tqdm(enumerate(available_img_files), desc='Processing images ...')
 		for idx, fn in pbar:
 			fn = fn.strip()
+			fn = data_loc + fn[1:]
 			if use_cache: 
 				if fn in cached_dict:
 					annotation, shape = cached_dict[fn]
@@ -132,6 +136,9 @@ class YoloDataset(torch.utils.data.Dataset):
 		return img, label
 
 	def __getitem__(self, idx):
+		# the idx was changed if rect.
+		# if return idx, not align with coco_index, and mAP is 0
+		# this error waste a morning.
 		original_idx = idx
 		if self.mosaic:
 			indices = [idx] + [np.random.randint(0, len(self)) for _ in range(3)]
@@ -195,7 +202,8 @@ class YoloDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
 	aug_param = {'scale': .1, 'shear': 5.0, 'translate': .1, 'degrees': 10.0, 'hsv_h':0.0138, 'hsv_s':0.678, 'hsv_v':0.36}
-	dataset = YoloDataset('data/my_val_data.txt', augment=True, rect=False, aug_param=aug_param)
+	dataset = YoloDataset('data/my_val_data.txt', augment=True,
+	                      rect=False, aug_param=aug_param, data_loc='../yolov3_spp')
 	json_path = "./data/pascal_voc_classes.json"  # json标签文件
 	with open(json_path, 'r') as f:
 		class_dict = json.load(f)

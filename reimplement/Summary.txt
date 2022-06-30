@@ -82,9 +82,16 @@ note:
 	exp().clamp(max=), specify a reasonable max value to avoid overflow
 
 
-training: my code use mosaic(my own) and no affine augment mAP decrease.
-		TODO
-		   his code use mosaic and and no affine augment to keep mAP.
+training: my data use mosaic(my own) and no affine augment mAP decrease.
+		  his data use mosaic and and no affine augment to keep mAP.
+		  conclusion:
+		  	  use my implementation of model, loss and nms, just dataset comparison with the well trained weight, finetune 2 epochs with small lr, compare the estimation mAP
+		  	  hisdatamosaic > hisdatarect = mydatamosaic > mydatarect
+		  TODO
+		  	  Well structured code to git repo and compare his and my code
+		  	  		first my code run on repo
+		   	  train on partial well-trained weight
+		  
 rule of import 
 use server to solve
 	environment: generation of requirement.txt

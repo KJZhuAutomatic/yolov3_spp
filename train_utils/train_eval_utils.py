@@ -10,12 +10,7 @@ from .coco_utils import get_coco_api_from_dataset
 import train_utils.distributed_utils as utils
 
 from reimplement import YoloDataset, YoloV3SPP, nms, remap_coords
-'''
-sys.path.append(os.path.dirname(__file__) + os.sep + '../')
-print(sys.path)
-from ..models import Darknet
-from ..build_utils.datasets import LoadImagesAndLabels
-'''
+
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch,
                     print_freq, accumulate, img_size,
@@ -67,7 +62,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
 
             # loss
 
-            loss_dict = model.compute_loss(pred, targets, **model.hyp)
+            # loss_dict = model.compute_loss(pred, targets, **model.hyp)
             '''
             There was a error in model.compute_loss in cls loss wasting a morning.
             When specify label of cls, I used tgt_cls[:, cls] = 1, where tgt_cls
@@ -80,6 +75,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
             loss_dict_his = compute_loss(pred_clone, targets_clone, model)
             breakpoint()
             '''
+            loss_dict = compute_loss(pred, targets, model)
             losses = sum(loss for loss in loss_dict.values())
 
         # reduce losses over all GPUs for logging purpose
@@ -147,9 +143,9 @@ def evaluate(model, data_loader, coco=None, device=None):
         model_time = time.time()
         pred = model(imgs)[0]  # only get inference result
    
-        # pred = non_max_suppression(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
+        pred = non_max_suppression(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
 
-        pred = nms(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
+        # pred = nms(pred, conf_thres=0.01, iou_thres=0.6, multi_label=False)
         model_time = time.time() - model_time
 
         outputs = []
@@ -162,8 +158,8 @@ def evaluate(model, data_loader, coco=None, device=None):
                 boxes = p[:, :4]
                 # shapes: (h0, w0), ((h / h0, w / w0), pad)
                 # 将boxes信息还原回原图尺度，这样计算的mAP才是准确的
-                # boxes = scale_coords(imgs[index].shape[1:], boxes, shapes[index][0]).round()
-                boxes = remap_coords(imgs[index].shape[1:], boxes, shapes[index][0]).round()
+                boxes = scale_coords(imgs[index].shape[1:], boxes, shapes[index][0]).round()
+                # boxes = remap_coords(imgs[index].shape[1:], boxes, shapes[index][0]).round()
 
             # 注意这里传入的boxes格式必须是xmin, ymin, xmax, ymax，且为绝对坐标
             info = {"boxes": boxes.to(cpu_device),
