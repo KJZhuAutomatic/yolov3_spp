@@ -20,7 +20,17 @@ def train(hyp):
 
     wdir = str(Path(opt.weights).parent) + os.sep  # weights dir
     best = wdir + "best.pt"
-    results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    
+    result_dir = Path('result/finetune')
+    if opt.freeze_layers:
+        result_dir = result_dir / 'freeze'
+    else:
+        result_dir = result_dir / 'nofreeze'
+    if opt.rect:
+        result_dir = result_dir / 'rect'
+    else:
+        result_dir = result_dir / 'mosaic'
+    results_file = str(result_dir / 'mycode.txt')
 
     cfg = opt.cfg
     data = opt.data
@@ -182,7 +192,7 @@ def train(hyp):
     print("starting traning for %g epochs..." % epochs)
     print('Using %g dataloader workers' % nw)
     for epoch in range(start_epoch, epochs):
-        '''
+        
         mloss, lr = train_util.train_one_epoch(model, optimizer, train_dataloader,
                                                device, epoch,
                                                accumulate=accumulate,  # 迭代多少batch才训练完64张图片
@@ -197,7 +207,7 @@ def train(hyp):
     
         # update scheduler
         scheduler.step()
-        '''
+    
 
         if opt.notest is False or epoch == epochs - 1:
             # evaluate on the test dataset
@@ -256,22 +266,22 @@ def train(hyp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=2)
-    parser.add_argument('--batch-size', type=int, default=2)
+    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
     parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
-    parser.add_argument('--hyp', type=str, default='cfg/hyp.yaml', help='hyperparameters path')
+    parser.add_argument('--hyp', type=str, default='cfg/finetune_hyp.yaml', help='hyperparameters path')
     parser.add_argument('--multi-scale', type=bool, default=True,
                         help='adjust (67%% - 150%%) img_size every 10 batches')
     parser.add_argument('--img-size', type=int, default=512, help='test size')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--savebest', type=bool, default=True, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
-    parser.add_argument('--weights', type=str, default='../yolov3_spp/weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='../weights/yolov3spp-voc-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
-    parser.add_argument('--freeze-layers', type=bool, default=True, help='Freeze non-output layers')
+    parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
     opt = parser.parse_args()
