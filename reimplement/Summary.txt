@@ -92,6 +92,16 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  Now my rect not bad, mosaic should be improve.
 		  		rect train
 		  		mosaic
+
+mosaic procession:
+	random uniform sample the coords of center
+	for every image:
+		resize to longer size = img_size, record height and width 
+		align the corner, and compute the clamped region in image and mosaic image.
+		paste the image, and record pad value
+		convert the normalized coords to mosaic image:
+			xywh -> xyxy -> gain(h, w) -> pad 
+	concat the converted coords, clip out of mosaic image size
 		  
 rule of import 
 use server to solve

@@ -135,6 +135,49 @@ class YoloDataset(torch.utils.data.Dataset):
 		label[:, 1:] /= 2.0 
 		return img, label
 
+	def mosaic_load(self, indices:List[int]):
+		size = self.img_size
+		xc, yc = [int(np.random.uniform(0.5*size, 1.5*size))	for _ in range(2)]
+		mosaic_img = np.full(shape=(2*size, 2*size, 3), fill_value=114, dtype=np.uint8)
+		for i,idx in enumerate(indices):
+			img = cv2.imread(self.img_files[idx])  # note rect is False
+			img, _ = resize_img(img, self.img_size)
+			h, w = img.shape[:2]
+			if i == 0:
+				x1a, y1a = max(xc-w, 0), max(yc-h, 0)
+				x2a, y2a = xc, yc
+				x1b = w - (x2a - x1a)
+				y1b = h - (y2a - y1a)
+				x2b, y2b = w, h
+			elif i == 1:
+				x1a = xc
+				y1a = max(yc-h, 0)
+				x2a = min(xc+w, 2*size)
+				y2a = yc
+				x1b = 0
+				y1b = h - (y2a - y1a)
+				x2b = min(x2a - x1a, w)
+				y2b = h
+			elif i == 2:
+				x1a = max(xc-w, 0)
+				y1a = yc
+				x2a = xc
+				y2a = min(yc+h, 2*size)
+				x1b = w - (x2a - x1a)
+				y1b = 0
+				x2b = w
+				y2b = min(y2a - y1a, h)
+			else:
+				x1a, y1a = xc, yc
+				x2a = min(xc+w, 2*size)
+				y2a = min(yc+h, 2*size)
+				x1b, y1b = 0, 0
+				x2b, y2b = min(x2a - x1a, w), min(y2a - y1a, h)
+
+
+
+
+
 	def __getitem__(self, idx):
 		# the idx was changed if rect.
 		# if return idx, not align with coco_index, and mAP is 0
@@ -198,7 +241,7 @@ class YoloDataset(torch.utils.data.Dataset):
 	def coco_index(self, idx):
 		if self.rect:
 			idx = self.indexs[idx]
-		return torch.from_numpy(self.labels[idx]), self.shapes[idx, ::-1]
+		return torch.from_numpy(self.labels[idx].copy()), self.shapes[idx, ::-1]
 
 if __name__ == '__main__':
 	aug_param = {'scale': .1, 'shear': 5.0, 'translate': .1, 'degrees': 10.0, 'hsv_h':0.0138, 'hsv_s':0.678, 'hsv_v':0.36}

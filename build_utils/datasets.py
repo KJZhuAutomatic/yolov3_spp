@@ -406,8 +406,7 @@ def load_mosaic(self, index):
     labels4 = []  # 拼接图像的label信息
     s = self.img_size
     # 随机初始化拼接图像的中心点坐标
-    # xc, yc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]  # mosaic center x, y
-    xc, yc = [int(random.uniform(s , s * 1.5)) for _ in range(2)]  # mosaic center x, y
+    xc, yc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]  # mosaic center x, y
     # 从dataset中随机寻找三张图像进行拼接
     indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
     # 遍历四张图像进行拼接
