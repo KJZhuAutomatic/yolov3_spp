@@ -88,9 +88,10 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  	  use my implementation of model, loss and nms, just dataset comparison with the well trained weight, finetune 2 epochs with small lr, compare the estimation mAP
 		  	  hisdatamosaic > hisdatarect = mydatamosaic > mydatarect
 		  TODO
-		  	  Well structured code to git repo and compare his and my code
-		  	  		first my code run on repo
-		   	  train on partial well-trained weight
+		  	  Well structured code to git repo and compare his and my code √
+		  Now my rect not bad, mosaic should be improve.
+		  		rect train
+		  		mosaic
 		  
 rule of import 
 use server to solve

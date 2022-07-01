@@ -1,19 +1,18 @@
 import datetime
 import argparse
-
+import os
+import math
 import yaml
+import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
-import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
-
-from models import *
-from build_utils.datasets import *
-from build_utils.utils import *
-from train_utils import train_eval_utils as train_util
-from train_utils import get_coco_api_from_dataset
 from pathlib import Path
-
+from reimplement import YoloV3SPP, YoloDataset
+from reimplement.yolo_layers import YoloLayer
+from reimplement.train_utils.coco_utils import get_coco_api_from_dataset
+import reimplement.train_utils.train_eval_utils as train_util
+from build_utils.parse_config import parse_data_cfg
 
 def train(hyp):
     device = torch.device(opt.device if torch.cuda.is_available() else "cpu")
@@ -21,6 +20,7 @@ def train(hyp):
 
     wdir = str(Path(opt.weights).parent) + os.sep  # weights dir
     best = wdir + "best.pt"
+    
     result_dir = Path('result/train')
     if opt.freeze_layers:
         result_dir = result_dir / 'freeze'
@@ -30,7 +30,7 @@ def train(hyp):
         result_dir = result_dir / 'rect'
     else:
         result_dir = result_dir / 'mosaic'
-    results_file = str(result_dir / 'hiscode.txt')
+    results_file = str(result_dir / 'mycode.txt')
 
     cfg = opt.cfg
     data = opt.data
@@ -62,23 +62,20 @@ def train(hyp):
     data_dict = parse_data_cfg(data)
     train_path = data_dict["train"]
     test_path = data_dict["valid"]
-    nc = 1 if opt.single_cls else int(data_dict["classes"])  # number of classes
+    nc = int(data_dict["classes"])  # number of classes
     hyp["cls"] *= nc / 80  # update coco-tuned hyp['cls'] to current dataset
     hyp["obj"] *= imgsz_test / 320
 
-    # Remove previous results
-    for f in glob.glob(results_file):
-        os.remove(f)
-
     # Initialize model
-    model = Darknet(cfg).to(device)
+    model = YoloV3SPP(cfg).to(device)
+    model.hyp = hyp
 
     # 是否冻结权重，只训练predictor的权重
     if opt.freeze_layers:
         # 索引减一对应的是predictor的索引，YOLOLayer并不是predictor
         
         output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if
-                                isinstance(module, YOLOLayer)]
+                                isinstance(module, YoloLayer)]
     
         # 冻结除predictor和YOLOLayer外的所有层
         freeze_layer_indeces = [x for x in range(len(model.module_list)) if
@@ -115,7 +112,6 @@ def train(hyp):
         try:
             ckpt["model"] = {k: v for k, v in ckpt["model"].items() if model.state_dict()[k].numel() == v.numel()}
             model.load_state_dict(ckpt["model"], strict=False)
-            
         except KeyError as e:
             s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
@@ -154,39 +150,29 @@ def train(hyp):
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     scheduler.last_epoch = start_epoch  # 指定从哪个epoch开始
 
-    '''
     # Plot lr schedule
-    y = []
-    for _ in range(epochs):
-        scheduler.step()
-        y.append(optimizer.param_groups[0]['lr'])
-    plt.plot(y, '.-', label='LambdaLR')
-    plt.xlabel('epoch')
-    plt.ylabel('LR')
-    plt.tight_layout()
-    plt.savefig('LR.png', dpi=300)
-    breakpoint()
-    '''
+    # y = []
+    # for _ in range(epochs):
+    #     scheduler.step()
+    #     y.append(optimizer.param_groups[0]['lr'])
+    # plt.plot(y, '.-', label='LambdaLR')
+    # plt.xlabel('epoch')
+    # plt.ylabel('LR')
+    # plt.tight_layout()
+    # plt.savefig('LR.png', dpi=300)
+
+    # model.yolo_layers = model.module.yolo_layers
+
     # dataset
     # 训练集的图像尺寸指定为multi_scale_range中最大的尺寸
-    
-    train_dataset = LoadImagesAndLabels(train_path, imgsz_train, batch_size,
-                                        augment=True,
-                                        hyp=hyp,  # augmentation hyperparameters
-                                        rect=opt.rect,  # rectangular training
-                                        cache_images=opt.cache_images,
-                                        single_cls=opt.single_cls,
-                                        data_loc=data_dict["loc"] #yolo dataset location
-                                        )
-
-    
     # 验证集的图像尺寸指定为img_size(512)
-    val_dataset = LoadImagesAndLabels(test_path, imgsz_test, batch_size,
-                                      hyp=hyp,
-                                      rect=True,  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
-                                      cache_images=opt.cache_images,
-                                      single_cls=opt.single_cls, data_loc=data_dict["loc"])
-
+    train_dataset = YoloDataset(train_path, imgsz_train, batch_size, 
+                                augment=True, rect=opt.rect,
+                                aug_param=hyp, data_loc=data_dict['loc'])
+    
+    val_dataset = YoloDataset(test_path, imgsz_test, batch_size, 
+                                augment=False, rect=True, data_loc=data_dict['loc'])
+    
     # dataloader
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
@@ -202,13 +188,6 @@ def train(hyp):
                                                     num_workers=nw,
                                                     pin_memory=True,
                                                     collate_fn=val_dataset.collate_fn)
-
-    # Model parameters
-    model.nc = nc  # attach number of classes to model
-    model.hyp = hyp  # attach hyperparameters to model
-    model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    # 计算每个类别的目标个数，并计算每个类别的比重
-    # model.class_weights = labels_to_class_weights(train_dataset.labels, nc).to(device)  # attach class weights
 
     # start training
     # caching val_data when you have plenty of memory(RAM)
@@ -228,12 +207,12 @@ def train(hyp):
                                                grid_max=grid_max,  # grid的最大尺寸
                                                gs=gs,  # grid step: 32
                                                print_freq=100,  # 每训练多少个step打印一次信息
-                                               warmup=True, 
+                                               warmup=False, # just finetune 
                                                scaler=scaler)
     
         # update scheduler
         scheduler.step()
-        
+    
 
         if opt.notest is False or epoch == epochs - 1:
             # evaluate on the test dataset
@@ -303,21 +282,15 @@ if __name__ == '__main__':
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--savebest', type=bool, default=True, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
-    parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='../yolov3_spp/weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='../weights/yolov3spp-voc-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
-    parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
-    parser.add_argument('--freeze-layers', type=bool, default=True, help='Freeze non-output layers')
+    parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
     opt = parser.parse_args()
 
-    # 检查文件是否存在
-    opt.cfg = check_file(opt.cfg)
-    opt.data = check_file(opt.data)
-    opt.hyp = check_file(opt.hyp)
     print(opt)
 
     with open(opt.hyp) as f:
