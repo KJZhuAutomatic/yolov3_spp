@@ -90,7 +90,7 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  TODO
 		  	  Well structured code to git repo and compare his and my code √
 		  Now my rect not bad, mosaic should be improve.
-		  		rect train
+		  		rect train freeze is Ok, try affine augment to improve 
 		  		mosaic
 
 mosaic procession:

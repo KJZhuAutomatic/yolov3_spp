@@ -140,7 +140,7 @@ def train(hyp):
         if epochs < start_epoch:
             print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
                   (opt.weights, ckpt['epoch'], epochs))
-            epochs += ckpt['epoch']  # finetune additional epochs
+            epochs += start_epoch  # finetune additional epochs
 
         if opt.amp and "scaler" in ckpt:
             scaler.load_state_dict(ckpt["scaler"])
@@ -148,7 +148,10 @@ def train(hyp):
         del ckpt
 
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf
-    lf = lambda x: ((1 + math.cos(x * math.pi / epochs)) / 2) * (1 - hyp["lrf"]) + hyp["lrf"]  # cosine
+    if opt.reinit:
+        lf = lambda x: ((1 + math.cos(x * math.pi / epochs)) / 2) * (1 - hyp["lrf"]) + hyp["lrf"]  # cosine
+    else:
+        lf = lambda x: hyp['lr0'] * hyp['lr0']
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     scheduler.last_epoch = start_epoch  # 指定从哪个epoch开始
     if not opt.reinit:
@@ -279,7 +282,7 @@ def train(hyp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
     parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
@@ -294,7 +297,7 @@ if __name__ == '__main__':
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
-    parser.add_argument('--freeze-layers', type=bool, default=True, help='Freeze non-output layers')
+    parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
     parser.add_argument('--reinit', action='store_true', help='')
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
