@@ -139,6 +139,7 @@ class YoloDataset(torch.utils.data.Dataset):
 		size = self.img_size
 		xc, yc = [int(np.random.uniform(0.5*size, 1.5*size))	for _ in range(2)]
 		mosaic_img = np.full(shape=(2*size, 2*size, 3), fill_value=114, dtype=np.uint8)
+		mosaic_labels = []
 		for i,idx in enumerate(indices):
 			img = cv2.imread(self.img_files[idx])  # note rect is False
 			img, _ = resize_img(img, self.img_size)
@@ -174,9 +175,20 @@ class YoloDataset(torch.utils.data.Dataset):
 				x1b, y1b = 0, 0
 				x2b, y2b = min(x2a - x1a, w), min(y2a - y1a, h)
 
-
-
-
+			mosaic_img[y1a:y2a, x1a:x2a, :] = img[y1b:y2b, x1b:x2b, :]
+			padw = x1a - x1b
+			padh = y1a - y1b
+			label = self.labels[idx].copy() # [cls, x, y, w, h]
+			label[:, 1::2] *= w
+			label[:, 2::2] *= h
+			label[:, 1:] = xywh2xyxy(label[:, 1:])
+			label[:, 1::2] += padw
+			label[:, 2::2] += padh
+			mosaic_labels.append(label)
+		mosaic_label = np.concatenate(mosaic_labels, axis=0)
+		np.clip(mosaic_label, 0, 2*size, out=mosaic_label)
+		mosaic_label[:, 1:] /= 2.0 # error mosaic_label / 2.0 change cls, same error as simple_mosaic_load
+		return cv2.resize(mosaic_img, (size, size)), mosaic_label
 
 	def __getitem__(self, idx):
 		# the idx was changed if rect.
@@ -185,7 +197,7 @@ class YoloDataset(torch.utils.data.Dataset):
 		original_idx = idx
 		if self.mosaic:
 			indices = [idx] + [np.random.randint(0, len(self)) for _ in range(3)]
-			img, label = self.simple_mosaic_load(indices)
+			img, label = self.mosaic_load(indices)
 			shapes = None
 		else:
 			if self.rect:
@@ -244,7 +256,7 @@ class YoloDataset(torch.utils.data.Dataset):
 		return torch.from_numpy(self.labels[idx].copy()), self.shapes[idx, ::-1]
 
 if __name__ == '__main__':
-	aug_param = {'scale': .1, 'shear': 5.0, 'translate': .1, 'degrees': 10.0, 'hsv_h':0.0138, 'hsv_s':0.678, 'hsv_v':0.36}
+	aug_param = {'scale': 0.0, 'shear': 0.0, 'translate': .0, 'degrees': 0.0, 'hsv_h':0.0138, 'hsv_s':0.678, 'hsv_v':0.36}
 	dataset = YoloDataset('data/my_val_data.txt', augment=True,
 	                      rect=False, aug_param=aug_param, data_loc='../yolov3_spp')
 	json_path = "./data/pascal_voc_classes.json"  # json标签文件
