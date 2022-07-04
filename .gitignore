@@ -1,0 +1,5 @@
+__pycache__
+weights
+.ipynb_checkpoints
+runs
+*.png
