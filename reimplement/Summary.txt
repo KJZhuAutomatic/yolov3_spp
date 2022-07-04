@@ -92,6 +92,7 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  Now my rect not bad, mosaic should be improve.
 		  		rect train freeze is Ok, try affine augment to improve 
 		  		mosaic
+		  	I will structured git repo, and find the error in dataset target and compute_loss.
 
 mosaic procession:
 	random uniform sample the coords of center
