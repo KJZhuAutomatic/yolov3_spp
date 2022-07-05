@@ -93,7 +93,10 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  Now my rect not bad, mosaic should be improve.
 		  		rect train freeze is Ok, try affine augment to improve 
 		  		mosaic
-		  	I will structured git repo, and find the error in dataset target and compute_loss.
+		  	I will structured git repo,√
+            and find the error in dataset target 
+            and compute_loss √ because of the smart initialize of conv bias before yolo layers.
+            I find the finetune mAP is lower, maybe train mAP lower than 0.55, see the result.
 
 mosaic procession:
 	random uniform sample the coords of center
