@@ -3,3 +3,4 @@ weights
 .ipynb_checkpoints
 runs
 *.png
+my_yolo_dataset
