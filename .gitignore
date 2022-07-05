@@ -1,6 +1,6 @@
-__pycache__
+*__pycache__*
 weights
-.ipynb_checkpoints
+*.ipynb_checkpoints*
 runs
 *.png
-my_yolo_dataset
+my_yolo_dataset/*
