@@ -127,6 +127,15 @@ def create_modules(parsed_dict_list: List[Dict[str, Any]]) -> Tuple[nn.ModuleLis
 			num_classes = int(module_param_dict['classes'])
 			module = YoloLayer(anchors[mask], strides_ls[yolo_idx])
 			yolo_idx += 1
+			# smart initialize for last conv bias
+			conv = modules_ls[-1][0]
+			bias = conv.bias.data
+			na = module.num_anchors
+			nc = len(bias) // na - 5
+			bias = bias.view(na, -1)
+			bias[:, 4] -= 4.5
+			bias[:, 5:] += np.log(0.6 / (nc - 0.99)) 
+			conv.bias.data = bias.view(-1)
 
 		elif module_type == 'upsample':
 			module = nn.Upsample(scale_factor=int(module_param_dict['stride']))

@@ -121,11 +121,6 @@ def train(hyp):
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
             raise KeyError(s) from e
 
-        # reinitialize weight of model
-        for p in model.parameters():
-            if p.requires_grad and p.data.dim() >= 2:  # use loaded weight if not requires_grad
-                torch.nn.init.kaiming_uniform_(p.data, a=0.1)
-
         # load optimizer
         if ckpt["optimizer"] is not None:
             optimizer.load_state_dict(ckpt["optimizer"])
@@ -176,7 +171,6 @@ def train(hyp):
                                         rect=opt.rect,  # rectangular training
                                         cache_images=opt.cache_images,
                                         single_cls=opt.single_cls,
-                                        data_loc=data_dict["loc"] #yolo dataset location
                                         )
 
     
@@ -185,7 +179,7 @@ def train(hyp):
                                       hyp=hyp,
                                       rect=True,  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
                                       cache_images=opt.cache_images,
-                                      single_cls=opt.single_cls, data_loc=data_dict["loc"])
+                                      single_cls=opt.single_cls)
 
     # dataloader
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
@@ -304,7 +298,7 @@ if __name__ == '__main__':
     parser.add_argument('--savebest', type=bool, default=True, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='../yolov3_spp/weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='./weights/yolov3-spp-ultralytics-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')

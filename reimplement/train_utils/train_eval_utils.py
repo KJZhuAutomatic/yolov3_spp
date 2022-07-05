@@ -13,6 +13,8 @@ from . import distributed_utils as utils
 
 from reimplement import YoloDataset, YoloV3SPP, nms, remap_coords
 
+from build_utils.utils import compute_loss
+
 def train_one_epoch(model, optimizer, data_loader, device, epoch,
                     print_freq, accumulate, img_size,
                     grid_min, grid_max, gs,
@@ -62,9 +64,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
             pred = model(imgs)
 
             # loss
-            # loss_dict = compute_loss(pred, targets, model)
             loss_dict = model.compute_loss(pred, targets, **model.hyp)
-            
             losses = sum(loss for loss in loss_dict.values())
 
         # reduce losses over all GPUs for logging purpose

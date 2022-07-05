@@ -60,7 +60,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                  hyp=None,  # 超参数字典，其中包含图像增强会使用到的超参数
                  rect=False,  # 是否使用rectangular training
                  cache_images=False,  # 是否缓存图片到内存中
-                 single_cls=False, pad=0.0, rank=-1, data_loc='.'):
+                 single_cls=False, pad=0.0, rank=-1):
 
         try:
             path = str(Path(path))
@@ -74,7 +74,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
             # 检查每张图片后缀格式是否在支持的列表中，保存支持的图像路径
             # img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
-            self.img_files = [data_loc+x[1:] for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+            self.img_files = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
             self.img_files.sort()  # 防止不同系统排序不同，导致shape文件出现差异
         except Exception as e:
             raise FileNotFoundError("Error loading data from {}. {}".format(path, e))

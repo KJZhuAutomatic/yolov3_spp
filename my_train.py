@@ -118,12 +118,6 @@ def train(hyp):
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
             raise KeyError(s) from e
 
-        if opt.reinit:
-            # reinitialize weight of model
-            for p in model.parameters():
-                if p.requires_grad and p.data.dim() >= 2:  # use loaded weight if not requires_grad
-                    torch.nn.init.kaiming_uniform_(p.data, a=0.1)
-
         # load optimizer
         if ckpt["optimizer"] is not None:
             optimizer.load_state_dict(ckpt["optimizer"])
@@ -148,14 +142,9 @@ def train(hyp):
         del ckpt
 
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf
-    if opt.reinit:
-        lf = lambda x: ((1 + math.cos(x * math.pi / epochs)) / 2) * (1 - hyp["lrf"]) + hyp["lrf"]  # cosine
-    else:
-        lf = lambda x: hyp['lr0'] * hyp['lr0']
+    lf = lambda x: ((1 + math.cos(x * math.pi / epochs)) / 2) * (1 - hyp["lrf"]) + hyp["lrf"]  # cosine
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     scheduler.last_epoch = start_epoch  # 指定从哪个epoch开始
-    if not opt.reinit:
-        scheduler.step()
 
     # Plot lr schedule
     '''
@@ -177,11 +166,10 @@ def train(hyp):
     # 训练集的图像尺寸指定为multi_scale_range中最大的尺寸
     # 验证集的图像尺寸指定为img_size(512)
     train_dataset = YoloDataset(train_path, imgsz_train, batch_size, 
-                                augment=True, rect=opt.rect,
-                                aug_param=hyp, data_loc=data_dict['loc'])
+                                augment=True, rect=opt.rect, aug_param=hyp)
     
     val_dataset = YoloDataset(test_path, imgsz_test, batch_size, 
-                                augment=False, rect=True, data_loc=data_dict['loc'])
+                                augment=False, rect=True)
     
     # dataloader
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
@@ -217,7 +205,7 @@ def train(hyp):
                                                grid_max=grid_max,  # grid的最大尺寸
                                                gs=gs,  # grid step: 32
                                                print_freq=100,  # 每训练多少个step打印一次信息
-                                               warmup=opt.reinit, 
+                                               warmup=True, 
                                                scaler=scaler)
     
         # update scheduler
@@ -293,12 +281,11 @@ if __name__ == '__main__':
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--savebest', type=bool, default=False, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
-    parser.add_argument('--weights', type=str, default='../weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='./weights/yolov3-spp-ultralytics-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
-    parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
-    parser.add_argument('--reinit', action='store_true', help='')
+    parser.add_argument('--freeze-layers', type=bool, default=True, help='Freeze non-output layers')
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
     opt = parser.parse_args()
@@ -309,5 +296,6 @@ if __name__ == '__main__':
         hyp = yaml.load(f, Loader=yaml.FullLoader)
 
     print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    tb_writer = SummaryWriter(log_dir='/root/tf-logs', comment=opt.name)
+    # tb_writer = SummaryWriter(log_dir='/root/tf-logs', comment=opt.name)
+    tb_writer = SummaryWriter(comment=opt.name)
     train(hyp)

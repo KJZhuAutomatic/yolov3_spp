@@ -113,11 +113,28 @@ class YoloV3SPP(nn.Module):
 		return target_box, target_cls, pos_inds, target_anchors
 
 if __name__ == '__main__':
-	net = YoloV3SPP('cfg/my_yolov3.cfg')
+	model = YoloV3SPP('cfg/my_yolov3.cfg')
+	from models import Darknet
+	his_model = Darknet('cfg/my_yolov3.cfg')
 	'''
 	print(list(net.state_dict().keys())[20:25])
 	print(list(torch.load('../weights/yolov3spp-voc-512.pt')['model'].keys())[20:25])
 	'''
-	net.load_state_dict(torch.load('weights/yolov3spp-voc-512.pt')['model'])
-	net.eval()
-	net(torch.zeros(1, 3, 512, 512))
+	# ckpt = torch.load('weights/yolov3-spp-ultralytics-512.pt')
+	ckpt = torch.load('./weights/yolov3spp-voc-512.pt')
+	ckpt["model"] = {k: v for k, v in ckpt["model"].items() if model.state_dict()[k].numel() == v.numel()}
+	model.load_state_dict(ckpt["model"], strict=False)
+	his_model.load_state_dict(ckpt["model"], strict=False)
+	images = torch.rand(2, 3, 512, 512)
+	my_preds = model(images)
+	his_preds = his_model(images)
+	for m_p,h_p in zip(my_preds, his_preds):
+		print((m_p-h_p).abs().max())
+
+	model.eval()
+	his_model.eval()
+	my_preds, _ = model(images)
+	his_preds, _ = his_model(images)
+	print((my_preds - his_preds).abs().max())
+
+	

@@ -35,6 +35,7 @@ class YoloLayer(nn.Module):
 		super(YoloLayer, self).__init__()
 		assert anchors.shape == (3, 2), f'yolo anchors shape should be [3, 2], get {anchors.shape}.'
 		self.normalized_anchors = Tensor(anchors / stride)
+		self.num_anchors = self.normalized_anchors.shape[0]
 		self.anchor_vec = self.normalized_anchors
 		self.stride = stride
 		self.grid = None

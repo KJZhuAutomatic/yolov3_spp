@@ -80,6 +80,7 @@ note:
 				two error in reimplement.utils nms func line 48,90.
 				an very fool error in reimplement.utils xyxy2xywh.
 	exp().clamp(max=), specify a reasonable max value to avoid overflow
+	when coding, record the completed testing to clear up .
 
 
 training: my data use mosaic(my own) and no affine augment mAP decrease.
