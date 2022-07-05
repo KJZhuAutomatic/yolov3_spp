@@ -177,8 +177,7 @@ def train(hyp):
                                         hyp=hyp,  # augmentation hyperparameters
                                         rect=opt.rect,  # rectangular training
                                         cache_images=opt.cache_images,
-                                        single_cls=opt.single_cls,
-                                        data_loc=data_dict["loc"] #yolo dataset location
+                                        single_cls=opt.single_cls
                                         )
 
     
@@ -187,7 +186,7 @@ def train(hyp):
                                       hyp=hyp,
                                       rect=True,  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
                                       cache_images=opt.cache_images,
-                                      single_cls=opt.single_cls, data_loc=data_dict["loc"])
+                                      single_cls=opt.single_cls)
     '''
     
     train_dataset = YoloDataset(train_path, imgsz_train, batch_size, 
@@ -314,12 +313,12 @@ if __name__ == '__main__':
     parser.add_argument('--savebest', type=bool, default=True, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='../weights/yolov3spp-voc-512.pt',
+    parser.add_argument('--weights', type=str, default='./weights/yolov3spp-voc-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
-    parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
+    parser.add_argument('--freeze-layers', type=bool, default=True, help='Freeze non-output layers')
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
     opt = parser.parse_args()
@@ -334,5 +333,5 @@ if __name__ == '__main__':
         hyp = yaml.load(f, Loader=yaml.FullLoader)
 
     print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    tb_writer = SummaryWriter(comment=opt.name)
+    tb_writer = SummaryWriter(log_dir='/root/tf-logs', comment=opt.name)
     train(hyp)

@@ -7,10 +7,10 @@ obj: 64.3  # obj loss gain (*=img_size/320 if img_size != 320)
 obj_pw: 1.0  # obj BCELoss positive_weight
 iou_t: 0.20  # iou training threshold
 # freeze rect train epochs29 best mAP 0.5
-# lr0: 0.001  # initial learning rate (SGD=5E-3 Adam=5E-4) 
-# lrf: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
-lr0: 0.005
-lrf: 0.01     
+lr0: 0.001  # initial learning rate (SGD=5E-3 Adam=5E-4) 
+lrf: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
+# lr0: 0.005
+# lrf: 0.01     
 momentum: 0.937  # SGD momentum
 weight_decay: 0.0005  # optimizer weight decay
 fl_gamma: 0.0  # focal loss gamma (efficientDet default is gamma=1.5)
