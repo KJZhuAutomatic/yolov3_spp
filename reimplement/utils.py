@@ -143,20 +143,26 @@ def clamp_coords(coords:Tensor, orig_img_shape):
 	coords[:, 1::2].clamp_(min=0, max=orig_img_shape[0]) 
 	return coords
 
-def random_affine(img:np.ndarray, label:np.ndarray, **hyp):
+def random_affine(img:np.ndarray, label:np.ndarray, border=0, **hyp):
 	h, w = img.shape[:2]
+	h += (2 * border)
+	w += (2 * border)
 	angle = np.random.uniform(-hyp['degrees'], hyp['degrees'])
 	scale = np.random.uniform(1-hyp['scale'], 1+hyp['scale'])
 	translation = np.random.uniform(-hyp['translate'], hyp['translate'], size=(2,1))
 	shear = np.tan(np.radians(np.random.uniform(-hyp['shear'], hyp['shear'], size=(2,))))
 	M, T, S = np.eye(3), np.eye(3), np.eye(3)
-	M[:2, :] = cv2.getRotationMatrix2D(center=(w/2, h/2), angle=angle, scale=scale)
-	T[:2, 2:3] = (translation * np.array([[w], [h]]))
+	M[:2, :] = cv2.getRotationMatrix2D(center=(img.shape[1]/2, img.shape[0]/2), 
+		                               angle=angle, scale=scale)
+	T[:2, 2:3] = (translation * np.array([[img.shape[1]], [img.shape[0]]])) \
+	                                   + np.array([[border], [border]])
 	S[0, 1], S[1, 0] = shear
 	transform = S @ T @ M
-	transformed_img = cv2.warpAffine(src=img, M=transform[:2], dsize=(w, h), borderValue=(0, 0, 0))
+	transformed_img = cv2.warpAffine(src=img, M=transform[:2], 
+		                             dsize=(w, h), borderValue=(114, 114, 114))
 	nobj = label.shape[0]
 	boxes = label[:, 1:] # x1y1x2y2
+	area0 = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 	coords = np.ones((4*nobj, 3), dtype=np.float32)
 	coords[:, :2] = boxes[:, [0, 1, 2, 3, 2, 1, 0, 3]].reshape(-1, 2) # x1y1 x2y2 x2y1 x1y2
 	transformed_coords = (transform @ coords.T).T  # [4*nobj, 3]
@@ -165,7 +171,19 @@ def random_affine(img:np.ndarray, label:np.ndarray, **hyp):
 	xmax = transformed_coords[:, [0, 2, 4, 6]].max(1, keepdims=True).clip(0, w)
 	ymin = transformed_coords[:, [1, 3, 5, 7]].min(1, keepdims=True).clip(0, h)
 	ymax = transformed_coords[:, [1, 3, 5, 7]].max(1, keepdims=True).clip(0, h)
-	new_label = np.concatenate((label[:, 0:1], xmin, ymin, xmax, ymax), axis=1)
+	w = (xmax - xmin).squeeze(axis=-1)
+	h = (ymax - ymin).squeeze(axis=-1)
+	area = w * h
+	small_boxes_filter = (w > 4) & (h > 4)
+	area_factor_filter = ((area / (area0*scale+1e-6)) > 0.2)
+	aspect_ratio_filter = ((w / (h+1e-6)) < 10.0) & ((h / (w+1e-6)) < 10.0)
+	inds = small_boxes_filter & area_factor_filter & aspect_ratio_filter
+	new_boxes = np.concatenate((xmin, ymin, xmax, ymax), axis=1)
+	new_label = np.concatenate((label[:, 0:1], new_boxes), axis=1)
+	if inds.any():
+		new_label = new_label[inds]
+	else:
+		new_label = np.zeros(shape=(0, 5), dtype=np.float32)
 	return transformed_img, new_label
 	
 def augment_hsv(img:np.ndarray, **hyp):

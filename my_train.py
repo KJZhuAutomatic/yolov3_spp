@@ -296,6 +296,6 @@ if __name__ == '__main__':
         hyp = yaml.load(f, Loader=yaml.FullLoader)
 
     print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    tb_writer = SummaryWriter(log_dir='/root/tf-logs', comment=opt.name)
-    # tb_writer = SummaryWriter(comment=opt.name)
+    # tb_writer = SummaryWriter(log_dir='/root/tf-logs', comment=opt.name)
+    tb_writer = SummaryWriter(comment=opt.name)
     train(hyp)

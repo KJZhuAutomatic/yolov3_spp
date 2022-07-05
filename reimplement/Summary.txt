@@ -71,6 +71,7 @@ Improvement:
 note:
 	the type of indices
 	torch.zeros(*size) √  torch.zeros(shape=(a,b)) ×
+	np.zeros(shape=(a, b)) √
 	IMPORTANT: when get partial data which meets the requirement, e.g torch.nonzero
 				pay attention to case that no data be gotten. In yolov3_spp.compute_loss, I was received loss of value nan, because of None of positive sample.
 				TODO nms func  √ Only indices is fine, compute will generate nan.
@@ -97,6 +98,9 @@ training: my data use mosaic(my own) and no affine augment mAP decrease.
             and find the error in dataset target 
             and compute_loss √ because of the smart initialize of conv bias before yolo layers.
             I find the finetune mAP is lower, maybe train mAP lower than 0.55, see the result.
+            two improvs in random_affine:
+            	filter some too small or large aspect ratio label
+            	when mosaic, just translate without zoom 
 
 mosaic procession:
 	random uniform sample the coords of center

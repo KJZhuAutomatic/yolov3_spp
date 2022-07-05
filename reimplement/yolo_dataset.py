@@ -184,9 +184,9 @@ class YoloDataset(torch.utils.data.Dataset):
 			label[:, 2::2] += padh
 			mosaic_labels.append(label)
 		mosaic_label = np.concatenate(mosaic_labels, axis=0)
-		np.clip(mosaic_label, 0, 2*size, out=mosaic_label)
-		mosaic_label[:, 1:] /= 2.0 # error mosaic_label / 2.0 change cls, same error as simple_mosaic_load
-		return cv2.resize(mosaic_img, (size, size)), mosaic_label
+		np.clip(mosaic_label[:, 1:], 0, 2*size, out=mosaic_label[:, 1:])
+		# mosaic_label[:, 1:] /= 2.0 # error mosaic_label / 2.0 change cls, same error as simple_mosaic_load
+		return random_affine(mosaic_img, mosaic_label, border=-size//2, **self.aug_param)
 
 	def __getitem__(self, idx):
 		# the idx was changed if rect.
@@ -216,7 +216,8 @@ class YoloDataset(torch.utils.data.Dataset):
 			label[:, 1::2] += left_pad
 			label[:, 2::2] += top_pad
 		if self.augment:
-			img, label = random_affine(img, label, **self.aug_param)
+			if not self.mosaic:
+				img, label = random_affine(img, label, **self.aug_param)
 			img = augment_hsv(img, **self.aug_param)
 			# TODO Flip
 		# breakpoint()
@@ -255,13 +256,13 @@ class YoloDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
 	aug_param = {'scale': 0.0, 'shear': 0.0, 'translate': .0, 'degrees': 0.0, 'hsv_h':0.0138, 'hsv_s':0.678, 'hsv_v':0.36}
-	dataset = YoloDataset('data/my_val_data.txt', augment=True,
-	                      rect=False, aug_param=aug_param, data_loc='../yolov3_spp')
+	dataset = YoloDataset('data/my_train_data.txt', augment=True,
+	                      rect=False, aug_param=aug_param)
 	json_path = "./data/pascal_voc_classes.json"  # json标签文件
 	with open(json_path, 'r') as f:
 		class_dict = json.load(f)
 	category_index = {str(v): str(k) for k, v in class_dict.items()}
-	for idx in range(5000, 5005):
+	for idx in range(0, 10):
 		img, label, _, _, _ = dataset[idx]
 		# 下面这两段测试，我本应该找label的错误，classes和scores也混在里面
 		# 对目标不清晰，那里错，要干什么，怎么找？一定先清晰，再干

@@ -621,12 +621,39 @@ def create_folder(path="./new_folder"):
 
 
 if __name__ == '__main__':
-    with open('cfg/hyp.yaml') as f:
+    with open('cfg/train_hyp.yaml') as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)
-    batch_size = 1
-    trainset = LoadImagesAndLabels(path='data/my_train_data.txt', batch_size=batch_size, augment=True, hyp=hyp)
-    loader = DataLoader(trainset, collate_fn=trainset.collate_fn, num_workers=0, batch_size=batch_size)
-    imgs,labels, _, _, _ = next(iter(loader))
+    batch_size = 6
+    trainset = LoadImagesAndLabels(path='data/my_train_data.txt', 
+                                   batch_size=batch_size, augment=True, 
+                                   hyp=hyp, rect=True)
+    import json
+    json_path = "./data/pascal_voc_classes.json"  # json标签文件
+    with open(json_path, 'r') as f:
+        class_dict = json.load(f)
+    category_index = {str(v): str(k) for k, v in class_dict.items()}
+    from reimplement.draw_box_utils import draw_objs
+    import matplotlib.pyplot as plt
+    for idx in range(5):
+        img, label, _, _, _ = trainset[idx]
+        label = label.numpy()
+        h, w = tuple(img.shape[1:])
+        img = Image.fromarray(img.numpy().transpose(1, 2, 0))
+        classes = label[:, 1].astype(np.int32) + 1
+        boxes = label[:, 2:]
+        boxes[:, [0, 2]] *= w
+        boxes[:, [1, 3]] *= h
+        boxes = xywh2xyxy(boxes)
+        scores = np.ones_like(classes)
+        plt.imshow(draw_objs(img, boxes, classes, scores, category_index=category_index))
+        plt.show()
+
+    '''
+    loader = DataLoader(trainset, collate_fn=trainset.collate_fn, 
+                        num_workers=0, batch_size=batch_size)
+    imgs,labels, path, _, _ = next(iter(loader))
     print(imgs.shape)
     print(labels)
-    
+    print(path)
+    '''
+
