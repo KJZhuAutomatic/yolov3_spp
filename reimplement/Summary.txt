@@ -64,6 +64,21 @@ compute_loss:
 			loss_cls = BCE(pred_cls, target_cls)
 	weighted losses
 
+train script:
+    choose the file to log
+    specify the image size of train and test
+    adjust obj and cls loss weight according to num of classes and image size
+    freeze weight and construct param group
+    construct optimizer and scaler (if amp)
+    load checkpoint to model weight, optimizer, trained_result, epochs and scaler
+    specify lr_scheduler, dataset and dataloader
+    for every epoch:
+        train a epoch (note accumulate and warmup)
+        evaluate write 4 loss lr and three coco index in tensorboard
+        write all coco index + losses and lr to result file
+        save all in a checkpoint.
+    
+
 Improvement:
 	my nms and remap_coords √
 	COCO evaluate a subset of dataset
