@@ -77,6 +77,7 @@ train script:
         evaluate write 4 loss lr and three coco index in tensorboard
         write all coco index + losses and lr to result file
         save all in a checkpoint.
+    note first check all file, avoid to abort in training.
     
 
 Improvement:
@@ -126,6 +127,7 @@ mosaic procession:
 		convert the normalized coords to mosaic image:
 			xywh -> xyxy -> gain(h, w) -> pad 
 	concat the converted coords, clip out of mosaic image size
+    random affine mosaic image and label, from 2*image_size -> image_size.
 		  
 rule of import 
 use server to solve
