@@ -78,11 +78,23 @@ train script:
         write all coco index + losses and lr to result file
         save all in a checkpoint.
     note first check all file, avoid to abort in training.
+error in edit the code of train script
+	``.`` and ``,``
+	``os.cpu_count() `` drop the ``()``
+	``num_workers`` drop the ``s``
+	forget to import ``get_coco_api_from_dataset, train_one_epoch, evaluate`` func
+	``get_coco_api_from_dataset(data_loader)`` X
+	``get_coco_api_from_dataset(data_loader.dataset) `` √
+	``torch.utils.tensorboard.writer.SummaryWriter() `` X
+	``from torch.utils.tensorboard import SummaryWriter `` √
+	``multi_scale`` ``args.multi_scale`` in reality
+	forget to specify the optional parameter aug_param in YoloDataset
     
 
 Improvement:
 	my nms and remap_coords √
 	COCO evaluate a subset of dataset
+	preavoid error, not accurate image size
 
 note:
 	the type of indices
@@ -98,7 +110,7 @@ note:
 				an very fool error in reimplement.utils xyxy2xywh.
 	exp().clamp(max=), specify a reasonable max value to avoid overflow
 	when coding, record the completed testing to clear up .
-
+	write ``if epoch `` -> ``if epoch is not None`` note epoch=0
 
 training: my data use mosaic(my own) and no affine augment mAP decrease.
 		  his data use mosaic and and no affine augment to keep mAP.
