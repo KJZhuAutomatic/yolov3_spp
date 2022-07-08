@@ -43,6 +43,9 @@ def main(args):
 
     model_cfg = args.model_cfg
     model = YoloV3SPP(model_cfg)
+    device = torch.device(args.device)
+    model.to(device)
+    model.hyp = train_hyp
     param_group = []
     if args.freeze_layer:
         for idx, module in enumerate(model.module_list):
@@ -84,7 +87,7 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
 
     if args.weights.endswith('.pt'):
-        ckpt = torch.load(args.weights)
+        ckpt = torch.load(args.weights, map_location=device)
 
         model_state_dict = model.state_dict()
         model_weight = {k: v for k, v in ckpt['model'].items() \
@@ -123,9 +126,6 @@ def main(args):
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                    collate_fn=testset.collate_fn, num_workers=num_worker)
     coco = get_coco_api_from_dataset(testloader.dataset)
-    device = torch.device(args.device)
-    model.to(device)
-    model.hyp = train_hyp
     accumulate = max(1, 64 // args.batch_size)
     gs = 32
     writer = SummaryWriter(log_dir='runs')
@@ -179,7 +179,7 @@ if __name__ == '__main__':
                         help='data path dict.')
     parser.add_argument('--model-cfg', default='./cfg/my_yolov3.cfg', type=str,
                         help='model construction config file')
-    parser.add_argument('--device', default='cpu', type=str, help='')
+    parser.add_argument('--device', default='cuda:0', type=str, help='')
     parser.add_argument('--freeze-layer', action='store_true')
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--weights', default='./weights/yolov3-spp-ultralytics-512.pt',

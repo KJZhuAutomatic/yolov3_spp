@@ -89,6 +89,9 @@ error in edit the code of train script
 	``from torch.utils.tensorboard import SummaryWriter `` √
 	``multi_scale`` ``args.multi_scale`` in reality
 	forget to specify the optional parameter aug_param in YoloDataset
+    load checkpoint not save completely: file cannot open
+    torch.load(' ', map_location=), note the map_location is important for optimizer, scaler, lr_scheduler which should load_state_dict, except model. can see the state_dict()
+    
     
 
 Improvement:
