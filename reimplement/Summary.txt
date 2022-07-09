@@ -92,7 +92,9 @@ error in edit the code of train script
     load checkpoint not save completely: file cannot open
     torch.load(' ', map_location=), note the map_location is important for optimizer, scaler, lr_scheduler which should load_state_dict, except model. can see the state_dict()
     
-    
+distributed train:
+	see the tutorial of distributed training.
+	see how to use coco dataset.
 
 Improvement:
 	my nms and remap_coords √
@@ -143,6 +145,7 @@ mosaic procession:
 			xywh -> xyxy -> gain(h, w) -> pad 
 	concat the converted coords, clip out of mosaic image size
     random affine mosaic image and label, from 2*image_size -> image_size.
+    mosaic is used in training, so not requires original shape
 		  
 rule of import 
 use server to solve

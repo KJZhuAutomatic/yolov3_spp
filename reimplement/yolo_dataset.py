@@ -130,8 +130,9 @@ class YoloDataset(torch.utils.data.Dataset):
 				offset_x -= size
 		img = cv2.resize(imgs, (size, size))
 		label = np.concatenate(labels, axis=0)
-		label[:, 1:] /= 2.0 
-		return img, label
+		label[:, 1:] /= 2.0
+		return random_affine(img, label, **self.aug_param) 
+		# return img, label
 
 	def mosaic_load(self, indices:List[int]):
 		size = self.img_size
@@ -195,7 +196,10 @@ class YoloDataset(torch.utils.data.Dataset):
 		original_idx = idx
 		if self.mosaic:
 			indices = [idx] + [np.random.randint(0, len(self)) for _ in range(3)]
-			img, label = self.mosaic_load(indices)
+			if np.random.rand() < 0.3:
+				img, label = self.simple_mosaic_load(indices)
+			else:
+				img, label = self.mosaic_load(indices)
 			shapes = None
 		else:
 			if self.rect:

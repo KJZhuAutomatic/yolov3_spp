@@ -113,12 +113,11 @@ class YoloV3SPP(nn.Module):
 		return target_box, target_cls, pos_inds, target_anchors
 
 if __name__ == '__main__':
-	model = YoloV3SPP('cfg/my_yolov3.cfg')
+	# model = YoloV3SPP('cfg/my_yolov3.cfg')
+	
 	from models import Darknet
 	his_model = Darknet('cfg/my_yolov3.cfg')
-	'''
-	print(list(net.state_dict().keys())[20:25])
-	print(list(torch.load('../weights/yolov3spp-voc-512.pt')['model'].keys())[20:25])
+	
 	'''
 	# ckpt = torch.load('weights/yolov3-spp-ultralytics-512.pt')
 	ckpt = torch.load('./weights/yolov3spp-voc-512.pt')
@@ -136,5 +135,8 @@ if __name__ == '__main__':
 	my_preds, _ = model(images)
 	his_preds, _ = his_model(images)
 	print((my_preds - his_preds).abs().max())
+	'''
+	preds = his_model(torch.rand(1, 3, 511, 511))
+	print([p.shape for p in preds])
 
 	
