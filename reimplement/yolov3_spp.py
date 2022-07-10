@@ -100,6 +100,7 @@ class YoloV3SPP(nn.Module):
 			zoomed_targets = targets * gain
 			# get anchors adaptive to current grid size
 			anchors = self.module_list[self.yolo_layers[idx]].normalized_anchors.to(device)
+			anchors = anchors.to(dtype)
 			# find positive sample
 			acr_ids, tgt_ids = torch.nonzero(wh_iou(anchors, zoomed_targets[:, -2:]) > iou_t, as_tuple=True)
 			# record num of positive sample corresponding anchros
