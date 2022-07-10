@@ -5,24 +5,54 @@ import argparse
 import yaml
 import numpy as np
 import torch
+import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
+from contextlib import contextmanager
 from reimplement import YoloV3SPP, YoloDataset
 from reimplement.train_utils.train_eval_utils import train_one_epoch, evaluate
 from reimplement.train_utils.coco_utils import get_coco_api_from_dataset
 
+def set_up_distributed(args):
+    def print(*args, **argv):
+        pass
+
+    if args.local_rank == -1:
+        args.distributed = False
+    else:
+        args.distributed = True
+
+    if args.distributed:
+        if not ismaster(args.local_rank):
+            import builtins
+            builtins.print = print
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+
+def ismaster(rank:int):
+    return rank in [-1, 0]
+
+@contextmanager
+def master_first(rank:int):
+    if not ismaster(rank):
+        torch.distributed.barrier()
+    yield
+    if ismaster(rank):
+        torch.distributed.barrier()
+
 def main(args):
-    log_folder = args.log
-    if not os.path.exists(log_folder):
-        os.mkdir(log_folder)
-    log_folder = pathlib.Path(log_folder)
-    log_file = str(log_folder / datetime.datetime.now().__format__('%Y-%m-%d-%H:%M')) + '.txt'
+    set_up_distributed(args)
+    if ismaster(args.local_rank):
+        log_folder = args.log
+        if not os.path.exists(log_folder):
+            os.mkdir(log_folder)
+            log_folder = pathlib.Path(log_folder)
+            log_file = str(log_folder / datetime.datetime.now().__format__('%Y-%m-%d-%H:%M')) + '.txt'
     
     grid_size = 32
     img_size = args.img_size
     if args.multi_scale:
         max_size = int(np.ceil(img_size / 0.667 / grid_size) * grid_size)
         min_size = int(np.ceil(img_size / 1.5 / grid_size) * grid_size)
-        print('Use multi scale train, image size range [%d %d].'%(min_size, max_size))
         
     train_hyp = args.train_hyp
     with open(train_hyp) as f:
@@ -43,6 +73,15 @@ def main(args):
 
     model_cfg = args.model_cfg
     model = YoloV3SPP(model_cfg)
+    if args.distributed:
+        with master_first(args.local_rank):
+            model_weight = 'init_weight.pt'
+            if ismaster(args.local_rank):
+                torch.save(model.state_dict(), model_weight)
+            else:
+                model.load_state_dict(torch.load(model_weight, map_location='cpu'))
+        os.remove(model_weight)
+
     device = torch.device(args.device)
     model.to(device)
     model.hyp = train_hyp
@@ -67,7 +106,7 @@ def main(args):
                 p.requires_grad_(False)
         param_group = list(model.module_list[max_pool_ind:].parameters())
     
-    lr = train_hyp['lr0']
+    lr = train_hyp['lr0'] * max(1, (dist.get_world_size() if args.distributed else 1)*args.batch_size // 64)
     momentum = train_hyp['momentum']
     weight_decay = train_hyp['weight_decay']
     optimizer = torch.optim.SGD(param_group, lr=lr, momentum=momentum, 
@@ -102,7 +141,7 @@ def main(args):
         if ckpt.get('scaler') is not None and scaler is not None:
             scaler.load_state_dict(ckpt['scaler'])
 
-        if ckpt.get('log') is not None:
+        if ckpt.get('log') is not None and ismaster(args.local_rank):
             with open(ckpt.get('log')) as origin_f:
                 with open(log_file, 'w') as f:
                     f.write(origin_f.read())
@@ -113,24 +152,60 @@ def main(args):
     else:
         raise ValueError('weights should be ends with .pt get %s'%args.weights[-3:])
 
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, 
+                      device_ids=[args.local_rank], output_device=args.local_rank)
+        model.hyp = model.module.hyp
+        model.compute_loss = model.module.compute_loss
+        # model.module_list = model.module.module_list
+
     trainset = YoloDataset(data_dict['train'], img_size=max_size, 
                            batch_size=args.batch_size, augment=True, 
-                           rect=args.rect, aug_param=train_hyp)
+                           rect=args.rect, aug_param=train_hyp, rank=args.local_rank)
 
     testset = YoloDataset(data_dict['valid'], img_size=args.img_size, 
-                          batch_size=args.batch_size, augment=False, rect=True)
+                          batch_size=args.batch_size, augment=False, 
+                          rect=False, rank=args.local_rank)
 
     num_worker = min(os.cpu_count(), args.batch_size)
+    # split data
+    if args.distributed:
+        train_smpler = torch.utils.data.distributed.DistributedSampler(trainset)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(testset)
+    else:
+        train_smpler = torch.utils.data.SequentialSampler(trainset) if args.rect \
+                                        else torch.utils.data.RandomSampler(trainset)
+        test_sampler = torch.utils.data.SequentialSampler(testset)
+
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
-            shuffle=not args.rect, collate_fn=trainset.collate_fn, num_workers=num_worker)
+            sampler=train_smpler, collate_fn=trainset.collate_fn, num_workers=num_worker)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
-                                   collate_fn=testset.collate_fn, num_workers=num_worker)
-    coco = get_coco_api_from_dataset(testloader.dataset)
-    accumulate = max(1, 64 // args.batch_size)
+             sampler=test_sampler, collate_fn=testset.collate_fn, num_workers=num_worker)
+    
+    if args.distributed:
+        import pickle
+        coco_tmp = 'coco.tmp'
+        with master_first(args.local_rank):
+            if ismaster(args.local_rank):
+                coco = get_coco_api_from_dataset(testloader.dataset)
+                with open(coco_tmp, 'wb') as f:
+                    pickle.dump(coco, f)
+            else:
+                with open(coco_tmp, 'rb') as f:
+                    coco = pickle.load(f)
+        os.remove(coco_tmp)
+    else:
+        coco = get_coco_api_from_dataset(testloader.dataset)
+    accumulate = max(1, 64 // (args.batch_size * dist.get_world_size() if args.distributed else 1))
     gs = 32
-    writer = SummaryWriter(log_dir='runs')
+    if ismaster(args.local_rank):
+        writer = SummaryWriter(log_dir='runs')
 
     for epoch in range(start_epochs, args.epochs):
+
+        if args.distributed:
+            torch.distributed.barrier()
+            train_smpler.set_epoch(epoch)
 
         mloss, lr = train_one_epoch(model, optimizer, trainloader, device, epoch, 
                         print_freq=100, accumulate=accumulate, img_size=img_size,
@@ -140,30 +215,32 @@ def main(args):
         lr_scheduler.step()
 
         result_info = evaluate(model, testloader, coco=coco, device=device)
-        text_ls = [str(i) for i in result_info] + [str(lr)]
-        with open(log_file, 'a') as f:
-            text = f'epoch [{epoch}/{args.epochs}]: ' + '  '.join(text_ls)
-            f.write(text)
+        if ismaster(args.local_rank):
+            text_ls = [str(round(i, 3)) for i in result_info] + [str(lr)]
+            with open(log_file, 'a') as f:
+                text = f'epoch [{epoch}/{args.epochs}]: ' + '  '.join(text_ls)
+                f.write(text)
 
-        coco_mAP = result_info[0]
-        voc_mAP = result_info[1]
-        tb_vals = [coco_mAP, voc_mAP] + mloss.detach().cpu().numpy().tolist()
-        tb_tags = ['coco_mAP', 'voc_mAP', 'train/box_loss', 'train/obj_loss', 'train/class_loss', 'train/loss']
-        for tag, val in zip(tb_tags, tb_vals):
-            writer.add_scalar(tag, val, epoch)
+            coco_mAP = result_info[0]
+            voc_mAP = result_info[1]
+            tb_vals = [coco_mAP, voc_mAP] + mloss.detach().cpu().numpy().tolist()
+            tb_tags = ['coco_mAP', 'voc_mAP', 'train/box_loss', 'train/obj_loss', 'train/class_loss', 'train/loss']
+            for tag, val in zip(tb_tags, tb_vals):
+                writer.add_scalar(tag, val, epoch)
 
-        # save all in checkpoint
-        save_dict = {'model': model.state_dict(),
-                     'epochs': epoch,
-                     'optimizer': optimizer.state_dict(),
-                     'log': log_file,
-                     'lr_scheduler': lr_scheduler.state_dict()}
-        if scaler is not None:
-            save_dict['scaler'] = scaler.state_dict()
-        weight_dir = pathlib.Path(args.weights).parent
-        save_file = str(weight_dir / f'yolov3-spp-epoch{epoch}-{args.epochs}.pt')
-        torch.save(save_dict, save_file)
+            # save all in checkpoint
+            save_dict = {'model': model.state_dict(),
+                         'epochs': epoch,
+                         'optimizer': optimizer.state_dict(),
+                         'log': log_file,
+                        'lr_scheduler': lr_scheduler.state_dict()}
+            if scaler is not None:
+                save_dict['scaler'] = scaler.state_dict()
+            weight_dir = pathlib.Path(args.weights).parent
+            save_file = str(weight_dir / f'yolov3-spp-epoch{epoch}-{args.epochs}.pt')
+            torch.save(save_dict, save_file)
 
+        
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train hyperparameters.')
@@ -188,5 +265,6 @@ if __name__ == '__main__':
                         help='num of epochs to train and evaluate.')
     parser.add_argument('--batch-size', default=16, type=int, help='')
     parser.add_argument('--rect', action='store_true')
+    parser.add_argument('--local_rank', type=int, default=-1)
     args = parser.parse_args()
     main(args)

@@ -93,8 +93,18 @@ error in edit the code of train script
     torch.load(' ', map_location=), note the map_location is important for optimizer, scaler, lr_scheduler which should load_state_dict, except model. can see the state_dict()
     
 distributed train:
-	see the tutorial of distributed training.
+	see the tutorial of distributed training. init_process_group, split dataset, broadcast model weight. optimizer and loss_fn is for process, after loss backward, average across all process and optimizer step.
+	sampler order DistributedSampler and set_epoch
+	note some attribute of model, after DDP it's model.module.attr, same for func attr 
 	see how to use coco dataset.
+	error:
+		argparse --local-rank and --local_rank
+		buildins module ->  builtins
+		master_first should be decorated by contextmanager and imported from contextlib
+
+
+contextmanager can be used when same file to be loaded for all process
+
 
 Improvement:
 	my nms and remap_coords √

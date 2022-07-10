@@ -24,7 +24,7 @@ class YoloDataset(torch.utils.data.Dataset):
 	def __init__(self, path:str, img_size:int = 416,
 	             batch_size:int = 16, 
 	             augment=True, rect=False,
-	             aug_param:Optional[Dict[str, float]] = None):
+	             aug_param:Optional[Dict[str, float]] = None, rank:int=-1):
 		super(YoloDataset, self).__init__()
 		assert not (img_size % 32), 'Assigned image size must be multiple of 32.'
 		with open(path) as f:
@@ -39,7 +39,10 @@ class YoloDataset(torch.utils.data.Dataset):
 		self.labels: List[np.ndarray] = []
 		self.img_files: List[str] = []
 		shapes: List[Tuple[int, int]] = []  # (width, height)
-		pbar = tqdm(enumerate(available_img_files), desc='Processing images ...')
+		if rank in [-1, 0]:
+			pbar = tqdm(enumerate(available_img_files), desc='Processing images ...')
+		else:
+			pbar = enumerate(available_img_files)
 		for idx, fn in pbar:
 			fn = fn.strip()
 			if use_cache: 
