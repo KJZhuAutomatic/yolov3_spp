@@ -97,6 +97,10 @@ distributed train:
 	sampler order DistributedSampler and set_epoch
 	note some attribute of model, after DDP it's model.module.attr, same for func attr 
 	see how to use coco dataset.
+	module attribute error √  tqdm will display when print be passed 
+	when amp should be more attention to dtype
+	lr_scheduler.step call before optimizer.step() 
+	try distributed train without amp first
 	error:
 		argparse --local-rank and --local_rank
 		buildins module ->  builtins

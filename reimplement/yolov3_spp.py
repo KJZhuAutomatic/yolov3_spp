@@ -42,7 +42,8 @@ class YoloV3SPP(nn.Module):
 		dtype = preds[0].dtype
 		grid_sizes = [tuple(p.shape[2:4]) for p in preds]
 		box_tgts, cls_tgts, pos_inds, anchor_tgts = \
-		           self.build_target(targets, grid_sizes, params['iou_t'], device)
+		      self.build_target(targets, grid_sizes, params['iou_t'], device, dtype=dtype)
+		
 		lbox = torch.zeros(1, device=device, dtype=dtype, requires_grad=True)
 		lcls = torch.zeros(1, device=device, dtype=dtype, requires_grad=True)
 		lobj = torch.zeros(1, device=device, dtype=dtype, requires_grad=True)
@@ -58,6 +59,7 @@ class YoloV3SPP(nn.Module):
 				pred_wh = pos_pred[:, 2:4].exp().clamp(max=1E3) * anchor_tgts[i]
 				pred_box = torch.cat((pred_xy, pred_wh), axis=1)
 				giou = compute_giou(pred_box, box_tgts[i])
+				giou = giou.to(dtype)
 				tgt_obj[b_ids, a_ids, g_i, g_j] = giou.detach().clamp(min=0)
 				pred_cls = pos_pred[:, 5:]
 				tgt_cls = torch.zeros_like(pred_cls, dtype=dtype, device=device)
@@ -75,13 +77,14 @@ class YoloV3SPP(nn.Module):
 
 	def build_target(self, targets:Tensor,
 	                 grid_sizes:List[Tuple[int, int]], 
-		             iou_t:float, device):
+		             iou_t:float, device, dtype):
 		'''
 		build target for each yolo layer
 		# targets [num_targets, 6] last dim: [img_idx, cls, x, y, w, h]
 		# grid_sizes (grid_h, grid_w) for sequential 3 layers
 		# iou_t: iou with targets and anchors threshold   
 		'''
+		targets = targets.to(dtype)
 		num_tgt = targets.shape[0]
 		# record positive sample (batch_size, anchor_id, grid_i, grid_j)
 		pos_inds: List[Tuple[Tensor, Tensor, Tensor, Tensor]] = []
@@ -93,7 +96,7 @@ class YoloV3SPP(nn.Module):
 		for idx, g_s in enumerate(grid_sizes):
 			# adjust targets(relative) to current grid size
 			gain = torch.as_tensor([1, 1, g_s[1], g_s[0], g_s[1], g_s[0]], \
-				                    device=device).unsqueeze(0)
+				                    device=device, dtype=dtype).unsqueeze(0)
 			zoomed_targets = targets * gain
 			# get anchors adaptive to current grid size
 			anchors = self.module_list[self.yolo_layers[idx]].normalized_anchors.to(device)
