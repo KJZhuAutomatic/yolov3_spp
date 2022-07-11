@@ -13,21 +13,20 @@ from reimplement.train_utils.train_eval_utils import train_one_epoch, evaluate
 from reimplement.train_utils.coco_utils import get_coco_api_from_dataset
 
 def set_up_distributed(args):
-    def print(*args, **argv):
+    def disable_print(*args, **argv):
         pass
-
     if args.local_rank == -1:
         args.distributed = False
     else:
         args.distributed = True
 
     if args.distributed:
+        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        torch.cuda.set_device(args.local_rank)
         if not ismaster(args.local_rank):
             import builtins
-            builtins.print = print
-        torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
-
+            builtins.print = disable_print
+        
 def ismaster(rank:int):
     return rank in [-1, 0]
 
@@ -45,8 +44,7 @@ def main(args):
         log_folder = args.log
         if not os.path.exists(log_folder):
             os.mkdir(log_folder)
-            log_folder = pathlib.Path(log_folder)
-            log_file = str(log_folder / datetime.datetime.now().__format__('%Y-%m-%d-%H:%M')) + '.txt'
+        log_file = os.path.join(log_folder, datetime.datetime.now().__format__('%Y-%m-%d-%H:%M')) + '.txt'
     
     grid_size = 32
     img_size = args.img_size
@@ -75,14 +73,13 @@ def main(args):
     model = YoloV3SPP(model_cfg)
     if args.distributed:
         with master_first(args.local_rank):
-            model_weight = 'init_weight.pt'
+            model_weight_tmp = 'init_weight.pt'
             if ismaster(args.local_rank):
-                torch.save(model.state_dict(), model_weight)
+                torch.save(model.state_dict(), model_weight_tmp)
             else:
-                model.load_state_dict(torch.load(model_weight, map_location='cpu'))
-        os.remove(model_weight)
+                model.load_state_dict(torch.load(model_weight_tmp, map_location='cpu'))
 
-    device = torch.device(args.device)
+    device = torch.device(args.local_rank)
     model.to(device)
     model.hyp = train_hyp
     param_group = []
@@ -181,7 +178,6 @@ def main(args):
             sampler=train_smpler, collate_fn=trainset.collate_fn, num_workers=num_worker)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
              sampler=test_sampler, collate_fn=testset.collate_fn, num_workers=num_worker)
-    
     if args.distributed:
         import pickle
         coco_tmp = 'coco.tmp'
@@ -193,13 +189,16 @@ def main(args):
             else:
                 with open(coco_tmp, 'rb') as f:
                     coco = pickle.load(f)
-        os.remove(coco_tmp)
     else:
         coco = get_coco_api_from_dataset(testloader.dataset)
     accumulate = max(1, 64 // (args.batch_size * dist.get_world_size() if args.distributed else 1))
     gs = 32
-    if ismaster(args.local_rank):
-        writer = SummaryWriter(log_dir='runs')
+    if args.distributed:
+        dist.barrier()
+        if ismaster(args.local_rank):
+            os.remove(model_weight_tmp)
+            os.remove(coco_tmp)
+            writer = SummaryWriter(log_dir='/root/tf-logs')
 
     for epoch in range(start_epochs, args.epochs):
 
@@ -239,7 +238,6 @@ def main(args):
             weight_dir = pathlib.Path(args.weights).parent
             save_file = str(weight_dir / f'yolov3-spp-epoch{epoch}-{args.epochs}.pt')
             torch.save(save_dict, save_file)
-
         
 
 if __name__ == '__main__':

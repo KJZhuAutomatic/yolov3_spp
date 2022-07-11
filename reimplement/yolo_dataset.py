@@ -199,10 +199,7 @@ class YoloDataset(torch.utils.data.Dataset):
 		original_idx = idx
 		if self.mosaic:
 			indices = [idx] + [np.random.randint(0, len(self)) for _ in range(3)]
-			if np.random.rand() < 0.3:
-				img, label = self.simple_mosaic_load(indices)
-			else:
-				img, label = self.mosaic_load(indices)
+			img, label = self.mosaic_load(indices)
 			shapes = None
 		else:
 			if self.rect:
